@@ -4,6 +4,7 @@ IMAGE   := pixel-agents-adt
 NAME    := pixel-agents-adt
 PORT_PIXEL := 3100
 PORT_NODERED := 1881
+OPENCODE_HOME ?= $(CURDIR)/home
 
 .PHONY: help build run stop logs clean
 
@@ -19,6 +20,7 @@ run: ## Run the container (needs GH_TOKEN from a `gh auth login`'d host; see AGE
 		--cap-add=SYS_ADMIN --cap-add=NET_ADMIN \
 		--security-opt seccomp=unconfined --security-opt apparmor=unconfined \
 		-p $(PORT_PIXEL):3100 -p $(PORT_NODERED):1881 \
+		-v "$(OPENCODE_HOME):/home-mirror:ro" \
 		-e GH_TOKEN="$$(gh auth token)" \
 		$(IMAGE)
 	@echo "pixel-agents:  http://localhost:$(PORT_PIXEL)"

@@ -18,6 +18,26 @@ branches, no comments).
 One `docker build` + `docker run`. No manual glue code. No accounts beyond
 GitHub. The default model needs no API key at all.
 
+## Optional OpenCode configuration
+
+The container supports a read-only home-directory mirror, matching the
+containerized agent workflow. `make run` mounts `./home` at `/home-mirror`,
+then the entrypoint copies it into the container's `/root` home directory.
+
+The repository contains non-credential examples only:
+
+```sh
+cp home/.config/opencode/opencode.jsonc.example \
+   home/.config/opencode/opencode.jsonc
+cp home/.local/share/opencode/auth.json.example \
+   home/.local/share/opencode/auth.json
+```
+
+Edit those ignored files with your model and provider settings. They are not
+copied into the image or committed. OpenCode reads auth from
+`~/.local/share/opencode/auth.json`; `~/.local/share/auth.json` is not a
+recognized path.
+
 ## Quick start
 
 ```sh
@@ -33,6 +53,7 @@ docker build -t pixel-agents-adt .
 docker run -d --name pixel-agents-adt \
   --cap-add=SYS_ADMIN --cap-add=NET_ADMIN \
   --security-opt seccomp=unconfined --security-opt apparmor=unconfined \
+  -v "$PWD/home:/home-mirror:ro" \
   -p 3100:3100 -p 1881:1881 \
   -e GH_TOKEN="$(gh auth token)" \
   pixel-agents-adt

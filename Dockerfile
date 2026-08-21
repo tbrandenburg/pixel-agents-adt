@@ -125,6 +125,14 @@ set -uo pipefail
 
 PIXEL_PORT="${PIXEL_PORT:-3100}"
 DEMO_PORT="${DEMO_PORT:-1881}"
+HOME_MIRROR="${HOME_MIRROR:-/home-mirror}"
+
+# Import optional, user-provided OpenCode config/auth into the container HOME.
+# The mirror is mounted read-only by `make run`; only its contents are copied.
+if [ -d "$HOME_MIRROR" ]; then
+  cp -a "$HOME_MIRROR"/. "$HOME"/
+fi
+
 pixel_home="${HOME}/.pixel-agents"
 
 mkdir -p "$pixel_home"
