@@ -21,6 +21,13 @@ GitHub. The default model needs no API key at all.
 ## Quick start
 
 ```sh
+make build
+make run
+```
+
+Or without `make`:
+
+```sh
 docker build -t pixel-agents-adt .
 
 docker run -d --name pixel-agents-adt \
