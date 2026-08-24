@@ -191,6 +191,23 @@ if [ -d "$HOME_MIRROR" ]; then
   chown -R root:root "$HOME"
 fi
 
+# node-red-agents' scripts/prime-base.sh and scripts/ensure-repo.sh both do a
+# plain `git clone https://<host>/<owner>/<repo>.git` with no credentials of
+# their own -- they rely entirely on git's own credential resolution. GH_TOKEN
+# (above) only authenticates the `gh` CLI itself; without this, git has no
+# credential.helper configured at all in a fresh container (no ~/.gitconfig),
+# so cloning any private repo (e.g. an internal org's repo) fails non-
+# interactively with "could not read Username ... No such device or address"
+# (no controlling tty to prompt on). `gh auth setup-git` wires git's
+# credential.helper to shell out to `gh auth git-credential`, fixing this for
+# every git invocation in the container (both scripts above, and
+# ensure-worktree.sh's own `git fetch origin`, which calls prime-base.sh
+# internally) -- one-time, global, no per-script changes needed. No-op/silently
+# skipped if GH_TOKEN isn't set (e.g. local testing without gh auth).
+if [ -n "${GH_TOKEN:-}" ]; then
+  gh auth setup-git
+fi
+
 pixel_home="${HOME}/.pixel-agents"
 
 mkdir -p "$pixel_home"
