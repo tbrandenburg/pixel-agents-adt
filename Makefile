@@ -5,14 +5,22 @@ NAME    := pixel-agents-adt
 PORT_PIXEL := 3100
 PORT_NODERED := 1881
 OPENCODE_HOME ?= $(CURDIR)/home
+# Optional: path to a corporate/TLS-intercepting-proxy CA bundle (e.g.
+# Netskope), needed only if your network MITMs HTTPS traffic and the plain
+# `docker build` fails with SELF_SIGNED_CERT_IN_CHAIN. Passed to the build as
+# a BuildKit secret, so it's never baked into image layers.
+CACERT ?=
+comma := ,
 
 .PHONY: help build run stop logs clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*## ' $(MAKEFILE_LIST) | sed -E 's/:.*## /|/' | awk -F'|' '{printf "  \033[36m%-8s\033[0m %s\n", $$1, $$2}'
 
-build: ## Build the image
-	docker build -t $(IMAGE) .
+build: ## Build the image (add CACERT=/path/to/ca.pem if your network intercepts TLS)
+	DOCKER_BUILDKIT=1 docker build \
+		$(if $(CACERT),--secret id=cacert$(comma)src=$(CACERT)) \
+		-t $(IMAGE) .
 
 run: ## Run the container (needs GH_TOKEN from a `gh auth login`'d host; see AGENTS.md for the flag rationale)
 	docker rm -f $(NAME) 2>/dev/null || true

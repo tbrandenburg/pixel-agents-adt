@@ -43,6 +43,19 @@ ARG NODE_RED_AGENTS_REF=main
 FROM node:22-bookworm AS pixel-builder
 ARG PIXEL_AGENTS_REPO
 ARG PIXEL_AGENTS_REF
+# Optional corporate/TLS-intercepting-proxy CA bundle (e.g. Netskope), injected
+# only via `docker build --secret id=cacert,src=<path>`. No-op if not supplied
+# -- this keeps the image buildable from a throwaway context on unrestricted
+# networks, per the portability goal above.
+RUN --mount=type=secret,id=cacert \
+    if [ -s /run/secrets/cacert ]; then \
+      cp /run/secrets/cacert /usr/local/share/ca-certificates/corporate-ca.crt \
+      && update-ca-certificates; \
+    fi
+# npm/Node use their own bundled CA list, not the OS trust store, so point it
+# at the (possibly corporate-CA-merged) system bundle too -- harmless no-op
+# when no secret was supplied, since it's still the standard public CA set.
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
 WORKDIR /src
 RUN git clone --depth 1 --branch "${PIXEL_AGENTS_REF}" "${PIXEL_AGENTS_REPO}" pixel-agents
 WORKDIR /src/pixel-agents
@@ -55,6 +68,12 @@ RUN npm run build
 FROM node:22-bookworm AS nodered-builder
 ARG NODE_RED_AGENTS_REPO
 ARG NODE_RED_AGENTS_REF
+RUN --mount=type=secret,id=cacert \
+    if [ -s /run/secrets/cacert ]; then \
+      cp /run/secrets/cacert /usr/local/share/ca-certificates/corporate-ca.crt \
+      && update-ca-certificates; \
+    fi
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
 WORKDIR /src
 RUN git clone --depth 1 --branch "${NODE_RED_AGENTS_REF}" "${NODE_RED_AGENTS_REPO}" node-red-agents
 WORKDIR /src/node-red-agents
@@ -93,9 +112,22 @@ FROM node:22-bookworm-slim AS runtime
 # + ripgrep/socat -- srt's own runtime dependencies (verified: it fails fast with
 # "Sandbox dependencies not available: ripgrep (rg) not found, socat not installed"
 # without them)
+# apt itself uses plain HTTP mirrors so ca-certificates isn't needed yet here;
+# it's installed first so the optional corporate CA (below) can be merged into
+# the trust store before any HTTPS curl calls run.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      curl ca-certificates git gnupg bubblewrap ripgrep socat \
-    && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+      curl ca-certificates git gnupg bubblewrap ripgrep socat
+# Optional corporate/TLS-intercepting-proxy CA bundle (e.g. Netskope), injected
+# only via `docker build --secret id=cacert,src=<path>`. No-op if not supplied
+# -- this keeps the image buildable from a throwaway context on unrestricted
+# networks, per the portability goal at the top of this file.
+RUN --mount=type=secret,id=cacert \
+    if [ -s /run/secrets/cacert ]; then \
+      cp /run/secrets/cacert /usr/local/share/ca-certificates/corporate-ca.crt \
+      && update-ca-certificates; \
+    fi
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
        -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
     && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \

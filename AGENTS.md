@@ -35,6 +35,24 @@ defaults (`tbrandenburg/pixel-agents`, `tbrandenburg/node-red-agents`, both
 container with the flags below), `stop` (remove container), `logs` (follow
 container logs), `clean` (stop + remove image).
 
+`build` accepts an optional `CACERT=/path/to/ca-bundle.pem` if your network
+sits behind a TLS-intercepting proxy (e.g. Netskope, or a corporate MITM
+root CA) — without it, `apt`/`curl`/`npm` inside the build fail with
+`SELF_SIGNED_CERT_IN_CHAIN`. The cert is passed as a BuildKit secret (never
+baked into image layers) and merged into both the OS trust store and
+Node's own CA list (`NODE_EXTRA_CA_CERTS`, since `npm` ignores the OS store
+by default) in every stage that touches the network:
+
+```sh
+make build CACERT=/path/to/corporate-ca-bundle.pem
+```
+
+Plain `docker build` also supports this directly:
+
+```sh
+DOCKER_BUILDKIT=1 docker build --secret id=cacert,src=/path/to/ca.pem -t pixel-agents-adt .
+```
+
 ## Building
 
 ```sh
