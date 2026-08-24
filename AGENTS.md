@@ -139,10 +139,13 @@ unprivileged container in several ways this image works around, in order:
    srt is exact-host, not wildcard; the model's real API host is a
    subdomain of the already-allowed `opencode.ai`.
 
-All three are applied by patching the ADT flow's `adt-run-agent` node's
-`srtAdvancedJson` field at build time (see the `RUN node -e '...'` step in
-the Dockerfile) — no hand-edits to `demo/flows.json` are needed to rebuild
-from a fresh clone.
+All three are applied to **every node with `runtime: "srt"`** in
+`demo/flows.json` (not just the ADT flow's `adt-run-agent` — the demo also
+ships several other srt-runtime agent nodes, e.g. the Playground tab's
+"Sandboxed Agent" and "Parallel Agents", both hardcoded to model
+`opencode/big-pickle`) by patching each one's `srtAdvancedJson` field at
+build time (see the `RUN node -e '...'` step in the Dockerfile) — no
+hand-edits to `demo/flows.json` are needed to rebuild from a fresh clone.
 
 ### Read-only guarantee
 

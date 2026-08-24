@@ -85,21 +85,38 @@ RUN npm install
 # "not available when running in unprivileged docker containers" -- see
 # linux-sandbox-utils.js). advancedJson *replaces* the whole settings object
 # (not a merge -- see packages/node-red-agents/shared/srt-settings.js), so this
-# reconstructs the flow's existing network/filesystem settings verbatim and
+# reconstructs each node's existing network/filesystem settings verbatim and
 # adds the one new top-level key.
+#
+# Patches EVERY node with runtime === "srt" in flows.json, not just
+# `adt-run-agent` -- the demo flow ships several other srt-runtime agent
+# nodes (e.g. the Playground tab's "Sandboxed Agent" and "Parallel Agents",
+# both hardcoded to model "opencode/big-pickle"), and every one of them hits
+# the identical "apply-seccomp: write /proc/self/uid_map: Operation not
+# permitted" failure without this flag -- there is nothing agent-node- or
+# flow-specific about the requirement, it's purely a property of running srt
+# inside Docker at all. "models.opencode.ai" is added to each node's allowed
+# domains unconditionally too: it's the real API host behind the free
+# `opencode/big-pickle` model (srt matches domains exact-host, not by
+# wildcard, so the already-allowed "opencode.ai" does not cover its "models."
+# subdomain), and adding it is harmless for nodes that don't use that model.
 RUN node -e '\
 const fs = require("fs"); \
 const path = "flows.json"; \
 const flows = JSON.parse(fs.readFileSync(path, "utf-8")); \
-const node = flows.find((n) => n.id === "adt-run-agent"); \
-if (!node) throw new Error("adt-run-agent node not found in flows.json"); \
-node.srtAdvancedJson = JSON.stringify({ \
-  network: { allowedDomains: [...node.srtAllowedDomains, "models.opencode.ai"], deniedDomains: [], strictAllowlist: node.srtStrictAllowlist !== false }, \
-  filesystem: { allowWrite: [...node.srtAllowedWriteDirs, "~/.cache", "~/.config", "~/.local/state", "~/.opencode"], denyRead: [], denyWrite: [] }, \
-  enableWeakerNestedSandbox: true, \
-}); \
+const srtNodes = flows.filter((n) => n.runtime === "srt"); \
+if (srtNodes.length === 0) throw new Error("no runtime=srt nodes found in flows.json"); \
+for (const node of srtNodes) { \
+  const allowedDomains = Array.from(new Set([...(node.srtAllowedDomains || []), "models.opencode.ai"])); \
+  node.srtAdvancedJson = JSON.stringify({ \
+    network: { allowedDomains, deniedDomains: [], strictAllowlist: node.srtStrictAllowlist !== false }, \
+    filesystem: { allowWrite: [...(node.srtAllowedWriteDirs || []), "~/.cache", "~/.config", "~/.local/state", "~/.opencode"], denyRead: [], denyWrite: [] }, \
+    enableWeakerNestedSandbox: true, \
+  }); \
+  console.log(`patched ${node.name || node.id} (${node.id}).srtAdvancedJson:`, node.srtAdvancedJson); \
+} \
 fs.writeFileSync(path, JSON.stringify(flows, null, 4)); \
-console.log("patched adt-run-agent.srtAdvancedJson:", node.srtAdvancedJson); \
+console.log(`patched ${srtNodes.length} srt-runtime node(s) total`); \
 '
 
 # ---------------------------------------------------------------------------
@@ -161,8 +178,17 @@ HOME_MIRROR="${HOME_MIRROR:-/home-mirror}"
 
 # Import optional, user-provided OpenCode config/auth into the container HOME.
 # The mirror is mounted read-only by `make run`; only its contents are copied.
+# `cp -a` preserves the mirror's on-disk ownership verbatim (typically the
+# host user's uid, e.g. 1000) -- srt's nested user namespace (apply-seccomp's
+# own inner unshare-user, see AGENTS.md "The srt patch") only grants root
+# override power over files owned by a uid mapped into that namespace; a
+# foreign host uid falls back to plain permission bits (usually 0755,
+# owner-write-only) and any sandboxed agent EACCESs trying to write there.
+# Re-own everything as root right after the copy so it matches the uid srt's
+# sandbox actually runs as (verified: `id` inside `srt` reports uid=0).
 if [ -d "$HOME_MIRROR" ]; then
   cp -a "$HOME_MIRROR"/. "$HOME"/
+  chown -R root:root "$HOME"
 fi
 
 pixel_home="${HOME}/.pixel-agents"
