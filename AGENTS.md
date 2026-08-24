@@ -29,6 +29,12 @@ Override `--build-arg PIXEL_AGENTS_REPO`/`_REF` and
 defaults (`tbrandenburg/pixel-agents`, `tbrandenburg/node-red-agents`, both
 `main`).
 
+## Makefile targets
+
+`make help` lists them; the shortlist: `build` (docker build), `run` (start
+container with the flags below), `stop` (remove container), `logs` (follow
+container logs), `clean` (stop + remove image).
+
 ## Building
 
 ```sh
